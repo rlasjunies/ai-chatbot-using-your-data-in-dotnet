@@ -2,6 +2,9 @@ using ChatBot;
 using ChatBot.Services;
 using Microsoft.Extensions.AI;
 
+// Load .env file if it exists
+DotNetEnv.Env.Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure JSON serialization for AOT

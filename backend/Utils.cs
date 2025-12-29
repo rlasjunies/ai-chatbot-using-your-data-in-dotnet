@@ -6,9 +6,9 @@ public static class Utils
 {
     public static string RequireEnv(this WebApplicationBuilder builder, string key)
     {
-        var v = builder.Configuration["Keys:" + key];
+        var v = Environment.GetEnvironmentVariable(key);
         if (string.IsNullOrWhiteSpace(v))
-            throw new Exception($"Missing env var: {key}");
+            throw new Exception($"Missing environment variable: {key}");
         return v!;
     }
 
