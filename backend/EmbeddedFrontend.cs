@@ -2,7 +2,7 @@ namespace ChatBot;
 
 public static class EmbeddedFrontend
 {
-    public const string ChatHtml = """
+  public const string ChatHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -247,7 +247,7 @@ public static class EmbeddedFrontend
 </html>
 """;
 
-    public const string QuestionHtml = """
+  public const string QuestionHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -401,7 +401,7 @@ public static class EmbeddedFrontend
 </html>
 """;
 
-    public const string SearchChunksHtml = """
+  public const string SearchChunksHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -517,7 +517,7 @@ public static class EmbeddedFrontend
 </html>
 """;
 
-    public const string SearchLandmarksHtml = """
+  public const string SearchLandmarksHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -638,7 +638,7 @@ public static class EmbeddedFrontend
 </html>
 """;
 
-    public const string IndexerHtml = """
+  public const string IndexerHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -800,7 +800,7 @@ public static class EmbeddedFrontend
 </html>
 """;
 
-    public const string IndexHtml = """
+  public const string IndexHtml = """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -865,10 +865,325 @@ public static class EmbeddedFrontend
                 The final chatbot interface with full conversation support
               </p>
             </li>
+            <li>
+              <a href="/ui/prompts" class="text-blue-700 font-medium">
+                ⚙️ Prompt Editor
+              </a>
+              <p class="text-sm text-neutral-600 mt-1">
+                Edit and manage system prompts in real-time
+              </p>
+            </li>
           </ul>
         </div>
       </main>
     </div>
+  </body>
+</html>
+""";
+
+  public const string PromptEditorHtml = """
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      function App() {
+        const [prompts, setPrompts] = useState([]);
+        const [expandedPrompt, setExpandedPrompt] = useState(null);
+        const [editingPrompt, setEditingPrompt] = useState(null);
+        const [editContent, setEditContent] = useState('');
+        const [isLoading, setLoading] = useState(true);
+        const [isSaving, setSaving] = useState(false);
+        const [isResetting, setResetting] = useState(false);
+        const [error, setError] = useState(null);
+        const [successMessage, setSuccessMessage] = useState(null);
+
+        async function loadPrompts() {
+          setLoading(true);
+          setError(null);
+          try {
+            const res = await fetch("/api/prompts");
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setPrompts(data);
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function loadPromptDetail(name) {
+          try {
+            const res = await fetch(`/api/prompts/${encodeURIComponent(name)}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setExpandedPrompt(data);
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          }
+        }
+
+        async function savePrompt(name) {
+          setSaving(true);
+          setError(null);
+          setSuccessMessage(null);
+          try {
+            const res = await fetch(`/api/prompts/${encodeURIComponent(name)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: editContent })
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setSuccessMessage(`✓ ${data.message}`);
+            setEditingPrompt(null);
+            setEditContent('');
+            setExpandedPrompt(null);
+            await loadPrompts();
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setSaving(false);
+          }
+        }
+
+        async function resetPrompt(name) {
+          if (!confirm(`Reset "${name}" to default?`)) return;
+          setSaving(true);
+          setError(null);
+          setSuccessMessage(null);
+          try {
+            // Get default from embedded prompts and save it
+            const defaults = {
+              'ChatSystemPrompt': 'ChatSystemPrompt',
+              'HydePrompt': 'HydePrompt',
+              'RagSystemPrompt': 'RagSystemPrompt'
+            };
+            
+            // Call reset all, then reload - simpler than individual reset
+            const res = await fetch("/api/prompts/reset", { method: "POST" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            setSuccessMessage(`✓ Prompt reset to default`);
+            setEditingPrompt(null);
+            setExpandedPrompt(null);
+            await loadPrompts();
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setSaving(false);
+          }
+        }
+
+        async function resetAllPrompts() {
+          if (!confirm("Reset ALL prompts to defaults?")) return;
+          setResetting(true);
+          setError(null);
+          setSuccessMessage(null);
+          try {
+            const res = await fetch("/api/prompts/reset", { method: "POST" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setSuccessMessage(`✓ ${data.message}`);
+            setEditingPrompt(null);
+            setExpandedPrompt(null);
+            await loadPrompts();
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setResetting(false);
+          }
+        }
+
+        function startEditing(prompt) {
+          setEditingPrompt(prompt.name);
+          setEditContent(prompt.content);
+        }
+
+        function cancelEditing() {
+          setEditingPrompt(null);
+          setEditContent('');
+        }
+
+        function toggleExpand(name) {
+          if (expandedPrompt?.name === name) {
+            setExpandedPrompt(null);
+          } else {
+            loadPromptDetail(name);
+          }
+        }
+
+        useEffect(() => {
+          loadPrompts();
+        }, []);
+
+        useEffect(() => {
+          if (successMessage) {
+            const timer = setTimeout(() => setSuccessMessage(null), 5000);
+            return () => clearTimeout(timer);
+          }
+        }, [successMessage]);
+
+        return (
+          <div className="min-h-screen bg-neutral-100">
+            <header className="sticky top-0 bg-white border-b z-10">
+              <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
+                <h1 className="text-xl font-semibold">⚙️ Prompt Editor</h1>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={resetAllPrompts}
+                    disabled={isResetting || isLoading}
+                    className="px-4 py-2 text-sm rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isResetting ? 'Resetting...' : 'Reset All to Defaults'}
+                  </button>
+                  <a href="/ui" className="text-blue-700 underline">← Back to Home</a>
+                </div>
+              </div>
+            </header>
+
+            <main className="mx-auto max-w-5xl px-6 py-8">
+              {/* Messages */}
+              {error && (
+                <div className="mb-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4">
+                  Error: {error}
+                </div>
+              )}
+              {successMessage && (
+                <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl p-4">
+                  {successMessage}
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> Changes take effect immediately after saving. 
+                  The next chat/question will use the updated prompt.
+                </p>
+              </div>
+
+              {/* Prompts List */}
+              {isLoading ? (
+                <div className="text-center py-16">
+                  <p className="text-neutral-500">Loading prompts...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {prompts.map((prompt) => {
+                    const isExpanded = expandedPrompt?.name === prompt.name;
+                    const isEditing = editingPrompt === prompt.name;
+
+                    return (
+                      <div key={prompt.name} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="p-5 flex items-center justify-between border-b border-neutral-100">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg">{prompt.name}</h3>
+                            <p className="text-sm text-neutral-500 mt-1">
+                              Last updated: {new Date(prompt.updatedAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => toggleExpand(prompt.name)}
+                            className="px-4 py-2 text-sm rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors"
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        </div>
+
+                        {/* Preview */}
+                        {!isExpanded && (
+                          <div className="p-5">
+                            <p className="text-sm text-neutral-600 font-mono whitespace-pre-wrap">
+                              {prompt.preview}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Expanded Content */}
+                        {isExpanded && expandedPrompt && (
+                          <div className="p-5">
+                            {isEditing ? (
+                              <div>
+                                <textarea
+                                  value={editContent}
+                                  onChange={(e) => setEditContent(e.target.value)}
+                                  rows={20}
+                                  className="w-full border border-neutral-300 rounded-lg p-3 font-mono text-sm focus:outline-none focus:border-blue-500"
+                                />
+                                <div className="flex gap-2 mt-4">
+                                  <button
+                                    onClick={() => savePrompt(prompt.name)}
+                                    disabled={isSaving || !editContent.trim()}
+                                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    {isSaving ? 'Saving...' : 'Save Changes'}
+                                  </button>
+                                  <button
+                                    onClick={cancelEditing}
+                                    disabled={isSaving}
+                                    className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-800 hover:bg-neutral-300 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <pre className="text-sm font-mono whitespace-pre-wrap bg-neutral-50 border border-neutral-200 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                  {expandedPrompt.content}
+                                </pre>
+                                <div className="flex gap-2 mt-4">
+                                  <button
+                                    onClick={() => startEditing(expandedPrompt)}
+                                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                  >
+                                    Edit Prompt
+                                  </button>
+                                  <button
+                                    onClick={() => resetPrompt(prompt.name)}
+                                    className="px-4 py-2 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                                  >
+                                    Reset to Default
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </main>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
   </body>
 </html>
 """;

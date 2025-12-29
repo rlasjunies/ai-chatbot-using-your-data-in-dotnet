@@ -25,6 +25,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 Startup.ConfigureServices(builder);
 var app = builder.Build();
 
+// Initialize prompts database with defaults if empty
+var promptStore = app.Services.GetRequiredService<PromptStore>();
+if (promptStore.IsEmpty())
+{
+    promptStore.ResetToDefaults();
+    Console.WriteLine("Prompts database initialized with defaults");
+}
+
 // API endpoints for index management
 // GET /api/index/list - List all indexed record IDs
 app.MapGet("/api/index/list", async (Pinecone.IndexClient pineconeIndex) =>
@@ -62,9 +70,63 @@ app.MapPost("/api/index/build", async (IndexBuilder indexBuilder) =>
 // var indexer = app.Services.GetRequiredService<IndexBuilder>();
 // await indexer.BuildIndex(SourceData.LandmarkNames);
 
+// API endpoints for prompt management
+// GET /api/prompts - List all prompts
+app.MapGet("/api/prompts", (PromptStore promptStore) =>
+{
+    var prompts = promptStore.ListAll();
+    var items = prompts.Select(p => new PromptListItem(
+        p.Name,
+        p.Content.Length > 100 ? p.Content.Substring(0, 100) + "..." : p.Content,
+        p.UpdatedAt
+    )).ToList();
+    return Results.Ok(items);
+});
+
+// GET /api/prompts/{name} - Get specific prompt
+app.MapGet("/api/prompts/{name}", (string name, PromptStore promptStore) =>
+{
+    var prompts = promptStore.ListAll();
+    var prompt = prompts.FirstOrDefault(p => p.Name == name);
+
+    if (prompt.Name == null)
+    {
+        return Results.NotFound(new { message = $"Prompt '{name}' not found" });
+    }
+
+    return Results.Ok(new PromptDetail(prompt.Name, prompt.Content, prompt.UpdatedAt));
+});
+
+// PUT /api/prompts/{name} - Update prompt
+app.MapPut("/api/prompts/{name}", (string name, PromptUpdateRequest request, PromptStore promptStore) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Content))
+    {
+        return Results.BadRequest(new { message = "Content cannot be empty" });
+    }
+
+    promptStore.SetPrompt(name, request.Content);
+    return Results.Ok(new PromptUpdateResponse(
+        "Prompt updated successfully",
+        name,
+        DateTime.UtcNow
+    ));
+});
+
+// POST /api/prompts/reset - Reset all prompts to defaults
+app.MapPost("/api/prompts/reset", (PromptStore promptStore) =>
+{
+    promptStore.ResetToDefaults();
+    return Results.Ok(new PromptResetResponse(
+        "All prompts reset to defaults",
+        3
+    ));
+});
+
 // Serve embedded frontend at /ui
 app.MapGet("/ui", () => Results.Content(EmbeddedFrontend.IndexHtml, "text/html"));
 app.MapGet("/ui/indexer", () => Results.Content(EmbeddedFrontend.IndexerHtml, "text/html"));
+app.MapGet("/ui/prompts", () => Results.Content(EmbeddedFrontend.PromptEditorHtml, "text/html"));
 app.MapGet("/ui/chat", () => Results.Content(EmbeddedFrontend.ChatHtml, "text/html"));
 app.MapGet("/ui/question", () => Results.Content(EmbeddedFrontend.QuestionHtml, "text/html"));
 app.MapGet("/ui/searchchunks", () => Results.Content(EmbeddedFrontend.SearchChunksHtml, "text/html"));

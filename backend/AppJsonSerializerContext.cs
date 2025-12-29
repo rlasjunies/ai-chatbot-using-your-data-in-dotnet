@@ -14,6 +14,13 @@ namespace ChatBot;
 [JsonSerializable(typeof(IndexStatsResponse))]
 [JsonSerializable(typeof(IndexBuildResponse))]
 [JsonSerializable(typeof(ProblemDetails))]
+[JsonSerializable(typeof(List<PromptListItem>))]
+[JsonSerializable(typeof(PromptListItem))]
+[JsonSerializable(typeof(PromptDetail))]
+[JsonSerializable(typeof(PromptUpdateRequest))]
+[JsonSerializable(typeof(PromptUpdateResponse))]
+[JsonSerializable(typeof(PromptResetResponse))]
+[JsonSerializable(typeof(DateTime))]
 [JsonSourceGenerationOptions(WriteIndented = false, PropertyNameCaseInsensitive = true)]
 public partial class AppJsonSerializerContext : JsonSerializerContext
 {

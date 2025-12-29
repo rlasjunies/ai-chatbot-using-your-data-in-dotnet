@@ -47,15 +47,24 @@ static class Startup
                  .Build(sp);
          });
 
-        builder.Services.AddTransient<ChatOptions>(sp => new ChatOptions
+        builder.Services.AddTransient<ChatOptions>(sp =>
         {
-            Tools = FunctionRegistry.GetTools(sp).ToList(),
+            var jsonOptions = new System.Text.Json.JsonSerializerOptions
+            {
+                TypeInfoResolverChain = { AppJsonSerializerContext.Default }
+            };
+
+            return new ChatOptions
+            {
+                Tools = FunctionRegistry.GetTools(sp, jsonOptions).ToList(),
+            };
         });
 
         builder.Services.AddSingleton<WikipediaClient>();
         builder.Services.AddSingleton<IndexBuilder>();
         builder.Services.AddSingleton<RagQuestionService>();
         builder.Services.AddSingleton<ArticleSplitter>();
+        builder.Services.AddSingleton<PromptStore>();
         builder.Services.AddSingleton<PromptService>();
     }
 }

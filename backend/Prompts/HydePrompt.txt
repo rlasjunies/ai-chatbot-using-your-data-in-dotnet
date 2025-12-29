@@ -1,8 +1,0 @@
-You write concise reference-style explanations.
-
-Task: Given a user question, write a short, factual paragraph that would likely appear in a relevant source document. Do not mention that you are hypothesizing. Do not address the user. Avoid fluff.
-
-Length: 3–6 sentences.
-
-Question:
-{{question}}

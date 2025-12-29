@@ -1,20 +1,24 @@
 namespace ChatBot.Services;
 
+/// <summary>
+/// Provides access to system prompts stored in the database.
+/// No caching - reads from DB on each access for immediate effect when prompts are updated.
+/// </summary>
 public class PromptService
 {
-    static readonly Dictionary<string, string> Prompts = [];
+    private readonly PromptStore _promptStore;
 
-    static PromptService()
+    public PromptService(PromptStore promptStore)
     {
-        var promptsDirectory = Path.Combine(AppContext.BaseDirectory, "Prompts");
-        foreach (var promptName in new[] { "RagSystemPrompt", "ChatSystemPrompt", "HydePrompt" })
-        {
-            var promptText = File.ReadAllText(Path.Combine(promptsDirectory, promptName + ".txt"));
-            Prompts[promptName] = promptText;
-        }
+        _promptStore = promptStore;
     }
 
-    public string RagSystemPrompt => Prompts["RagSystemPrompt"];
-    public string ChatSystemPrompt => Prompts["ChatSystemPrompt"];
-    public string HydePrompt => Prompts["HydePrompt"];
+    public string RagSystemPrompt => _promptStore.GetPrompt("RagSystemPrompt")
+        ?? EmbeddedPrompts.RagSystemPrompt;
+
+    public string ChatSystemPrompt => _promptStore.GetPrompt("ChatSystemPrompt")
+        ?? EmbeddedPrompts.ChatSystemPrompt;
+
+    public string HydePrompt => _promptStore.GetPrompt("HydePrompt")
+        ?? EmbeddedPrompts.HydePrompt;
 }
