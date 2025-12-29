@@ -1,10 +1,10 @@
 using System;
+using ChatBot.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Pinecone;
-using ChatBot.Services;
 
 namespace ChatBot;
 
@@ -14,16 +14,6 @@ static class Startup
     {
         var openAiKey = builder.RequireEnv("OPENAI_API_KEY");
         var pineconeKey = builder.RequireEnv("PINECONE_API_KEY");
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddPolicy("FrontendCors", policy =>
-                policy
-                    .WithOrigins("http://localhost:3000")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-            );
-        });
 
         builder.Services.AddSingleton<StringEmbeddingGenerator>(s => new OpenAI.Embeddings.EmbeddingClient(
                 model: "text-embedding-3-small",

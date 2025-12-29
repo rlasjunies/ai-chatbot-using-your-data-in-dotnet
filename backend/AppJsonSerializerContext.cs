@@ -10,7 +10,7 @@ namespace ChatBot;
 [JsonSerializable(typeof(List<ChatMessage>))]
 [JsonSerializable(typeof(ChatMessage))]
 [JsonSerializable(typeof(ChatRole))]
-[JsonSourceGenerationOptions(WriteIndented = false)]
+[JsonSourceGenerationOptions(WriteIndented = false, PropertyNameCaseInsensitive = true)]
 public partial class AppJsonSerializerContext : JsonSerializerContext
 {
 }
