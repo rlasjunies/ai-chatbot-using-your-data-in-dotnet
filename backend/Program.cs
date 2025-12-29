@@ -1,4 +1,5 @@
 using ChatBot;
+using ChatBot.Models;
 using ChatBot.Services;
 using Microsoft.Extensions.AI;
 
@@ -24,12 +25,46 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 Startup.ConfigureServices(builder);
 var app = builder.Build();
 
+// API endpoints for index management
+// GET /api/index/list - List all indexed record IDs
+app.MapGet("/api/index/list", async (Pinecone.IndexClient pineconeIndex) =>
+{
+    try
+    {
+        // Query with a dummy vector to get all IDs (Pinecone doesn't have a direct list API)
+        // We'll use DescribeIndexStats to get count
+        var stats = await pineconeIndex.DescribeIndexStatsAsync(new Pinecone.DescribeIndexStatsRequest());
+        var totalCount = stats.TotalVectorCount ?? 0;
+
+        return Results.Ok(new IndexStatsResponse(totalCount, totalCount > 0));
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Failed to get index stats: {ex.Message}");
+    }
+});
+
+// POST /api/index/build - Build the index
+app.MapPost("/api/index/build", async (IndexBuilder indexBuilder) =>
+{
+    try
+    {
+        await indexBuilder.BuildIndex(SourceData.LandmarkNames);
+        return Results.Ok(new IndexBuildResponse("Index built successfully", SourceData.LandmarkNames.Length));
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Failed to build index: {ex.Message}");
+    }
+});
+
 // Uncomment to do indexing when you run the project (you only need to do this once)...
 // var indexer = app.Services.GetRequiredService<IndexBuilder>();
 // await indexer.BuildIndex(SourceData.LandmarkNames);
 
 // Serve embedded frontend at /ui
 app.MapGet("/ui", () => Results.Content(EmbeddedFrontend.IndexHtml, "text/html"));
+app.MapGet("/ui/indexer", () => Results.Content(EmbeddedFrontend.IndexerHtml, "text/html"));
 app.MapGet("/ui/chat", () => Results.Content(EmbeddedFrontend.ChatHtml, "text/html"));
 app.MapGet("/ui/question", () => Results.Content(EmbeddedFrontend.QuestionHtml, "text/html"));
 app.MapGet("/ui/searchchunks", () => Results.Content(EmbeddedFrontend.SearchChunksHtml, "text/html"));

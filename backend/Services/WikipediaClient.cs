@@ -20,22 +20,23 @@ public partial class WikipediaClient
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        TypeInfoResolver = WikipediaJsonContext.Default
     };
 
-    private sealed class WikiApiResponse
+    public sealed class WikiApiResponse
     {
         [JsonPropertyName("query")]
         public WikiQuery? Query { get; set; }
     }
 
-    private sealed class WikiQuery
+    public sealed class WikiQuery
     {
         [JsonPropertyName("pages")]
         public List<WikiPage> Pages { get; set; } = new();
     }
 
-    private sealed class WikiPage
+    public sealed class WikiPage
     {
         [JsonPropertyName("pageid")]
         public long? PageId { get; set; }

@@ -638,6 +638,168 @@ public static class EmbeddedFrontend
 </html>
 """;
 
+    public const string IndexerHtml = """
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Index Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      function App() {
+        const [indexStats, setIndexStats] = useState(null);
+        const [isLoading, setLoading] = useState(true);
+        const [isBuilding, setBuilding] = useState(false);
+        const [error, setError] = useState(null);
+        const [buildResult, setBuildResult] = useState(null);
+
+        async function loadIndexStats() {
+          setLoading(true);
+          setError(null);
+          try {
+            const res = await fetch("/api/index/list");
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setIndexStats(data);
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function buildIndex() {
+          setBuilding(true);
+          setError(null);
+          setBuildResult(null);
+          try {
+            const res = await fetch("/api/index/build", { method: "POST" });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            setBuildResult(data);
+            // Reload stats after building
+            await loadIndexStats();
+          } catch (err) {
+            console.error(err);
+            setError(err.message || String(err));
+          } finally {
+            setBuilding(false);
+          }
+        }
+
+        useEffect(() => {
+          loadIndexStats();
+        }, []);
+
+        return (
+          <div className="min-h-screen bg-neutral-100">
+            <header className="sticky top-0 bg-white border-b">
+              <div className="mx-auto max-w-4xl px-6 py-4 flex items-center justify-between">
+                <h1 className="text-xl font-semibold">🔧 Index Manager</h1>
+                <a href="/ui" className="text-blue-700 underline">← Back to Home</a>
+              </div>
+            </header>
+
+            <main className="mx-auto max-w-4xl px-6 py-8">
+              {/* Status Card */}
+              <div className="bg-white border border-neutral-200 rounded-2xl p-6 mb-6">
+                <h2 className="text-lg font-semibold mb-4">Index Status</h2>
+                
+                {isLoading ? (
+                  <p className="text-neutral-500">Loading...</p>
+                ) : error ? (
+                  <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">
+                    Error: {error}
+                  </div>
+                ) : indexStats ? (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-sm font-medium">Total Records:</span>
+                      <span className="text-2xl font-bold text-blue-700">{indexStats.count}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Status:</span>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        indexStats.hasRecords 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {indexStats.hasRecords ? '✓ Indexed' : '⚠ No Records'}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Build Index Card */}
+              <div className="bg-white border border-neutral-200 rounded-2xl p-6">
+                <h2 className="text-lg font-semibold mb-4">Build Index</h2>
+                <p className="text-sm text-neutral-600 mb-4">
+                  Click the button below to build the vector search index from Wikipedia articles. 
+                  This process will fetch and embed multiple landmark articles.
+                </p>
+
+                <button
+                  onClick={buildIndex}
+                  disabled={isBuilding || (indexStats && indexStats.hasRecords)}
+                  className="px-6 py-3 rounded-xl bg-blue-600 text-white font-medium disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                >
+                  {isBuilding ? 'Building Index...' : 'Create Index'}
+                </button>
+
+                {indexStats && indexStats.hasRecords && (
+                  <p className="mt-3 text-sm text-neutral-500">
+                    Index already exists. Button is disabled.
+                  </p>
+                )}
+
+                {buildResult && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <p className="text-sm text-green-800 font-medium">
+                      ✓ {buildResult.message}
+                    </p>
+                    <p className="text-xs text-green-700 mt-1">
+                      Processed {buildResult.recordCount} landmarks
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Refresh Button */}
+              <div className="mt-6 text-center">
+                <button
+                  onClick={loadIndexStats}
+                  disabled={isLoading}
+                  className="px-4 py-2 text-sm text-blue-700 hover:text-blue-800 underline disabled:text-gray-400"
+                >
+                  {isLoading ? 'Refreshing...' : '🔄 Refresh Status'}
+                </button>
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
+""";
+
     public const string IndexHtml = """
 <!DOCTYPE html>
 <html lang="en">
@@ -663,6 +825,14 @@ public static class EmbeddedFrontend
         <div class="bg-white border border-neutral-200 rounded-2xl p-6">
           <h2 class="text-lg font-semibold mb-4">Available Pages:</h2>
           <ul class="space-y-3">
+            <li>
+              <a href="/ui/indexer" class="text-blue-700 font-medium">
+                🔧 Index Manager
+              </a>
+              <p class="text-sm text-neutral-600 mt-1">
+                Manage and build the vector search index
+              </p>
+            </li>
             <li>
               <a href="/ui/searchlandmarks" class="text-blue-700 font-medium">
                 1. Search Landmarks
