@@ -8,15 +8,11 @@ public static class FunctionRegistry
         // This code happens in the composition root, so pull the service from the IServiceProvider
         var vectorService = sp.GetRequiredService<VectorSearchService>();
 
+        // AOT-compatible: Use delegate instead of reflection
         yield return AIFunctionFactory.Create(
-            typeof(VectorSearchService).GetMethod(nameof(VectorSearchService.FindInDatabase),
-            [typeof(string)])!,
-            vectorService,
-            new AIFunctionFactoryOptions
-            {
-                Name = "database_search_service",
-                Description = "Searches for information about landmarks in the database based on a semantic search query.",
-            });
+            (string query) => vectorService.FindInDatabase(query),
+            "database_search_service",
+            "Searches for information about landmarks in the database based on a semantic search query.");
 
     }
 }

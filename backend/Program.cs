@@ -3,6 +3,13 @@ using ChatBot.Services;
 using Microsoft.Extensions.AI;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure JSON serialization for AOT
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
+});
+
 Startup.ConfigureServices(builder);
 var app = builder.Build();
 
