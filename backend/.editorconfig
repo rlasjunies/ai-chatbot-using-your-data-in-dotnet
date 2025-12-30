@@ -1,5 +1,0 @@
-root = true
-
-[*]
-dotnet_diagnostic.SKEXP0001.severity = none
-dotnet_diagnostic.SKEXP0050.severity = none
