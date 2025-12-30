@@ -31,4 +31,12 @@
     </None>
   </ItemGroup>
 
+  <!-- Include sqlite-vec native library with output -->
+  <ItemGroup>
+    <Content Include="vec0.dll" Condition="Exists('vec0.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

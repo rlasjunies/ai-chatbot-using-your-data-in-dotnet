@@ -7,7 +7,7 @@ public static class FunctionRegistry
     public static IEnumerable<AITool> GetTools(this IServiceProvider sp, JsonSerializerOptions? jsonOptions = null)
     {
         // This code happens in the composition root, so pull the service from the IServiceProvider
-        var vectorService = sp.GetRequiredService<VectorSearchService>();
+        var vectorService = sp.GetRequiredService<IVectorSearchService>();
 
         // AOT-compatible: Use delegate instead of reflection
         yield return AIFunctionFactory.Create(

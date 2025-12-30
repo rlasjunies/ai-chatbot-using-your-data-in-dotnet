@@ -3,7 +3,7 @@ using Microsoft.Extensions.AI;
 
 namespace ChatBot.Services;
 
-public class RagQuestionService(VectorSearchService vectorSearch, IChatClient client, ChatOptions chatOptions, PromptService promptService)
+public class RagQuestionService(IVectorSearchService vectorSearch, IChatClient client, ChatOptions chatOptions, PromptService promptService)
 {
     public async Task<string> AnswerQuestion(string question)
     {

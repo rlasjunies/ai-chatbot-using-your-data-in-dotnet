@@ -82,7 +82,7 @@ public partial class WikipediaClient
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        var apiResponse = JsonSerializer.Deserialize<WikiApiResponse>(json, JsonOpts)
+        var apiResponse = JsonSerializer.Deserialize(json, WikipediaJsonContext.Default.WikiApiResponse)
                   ?? throw new InvalidOperationException("Failed to deserialize Wikipedia response.");
 
         var firstPage = apiResponse.Query?.Pages?.FirstOrDefault();

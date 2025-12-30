@@ -2,9 +2,13 @@ using ChatBot.Models;
 
 namespace ChatBot.Services;
 
+/// <summary>
+/// Legacy vector search service - kept for backward compatibility
+/// Use IVectorSearchService interface for new code
+/// </summary>
 public class VectorSearchService(StringEmbeddingGenerator embeddingGenerator,
                            Pinecone.IndexClient pineconeIndex,
-                           DocumentChunkStore contentStore)
+                           DocumentChunkStore contentStore) : IVectorSearchService
 {
     public async Task<List<DocumentChunk>> FindTopKChunks(string query, int k)
     {

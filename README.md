@@ -1,6 +1,6 @@
 # AI Chatbot Using Your Data in .NET
 
-A high-performance, AOT-compiled AI chatbot application built with .NET 10 that uses Retrieval-Augmented Generation (RAG) to answer questions about landmarks using Wikipedia data. The application features vector search powered by Pinecone and OpenAI embeddings, with an embedded web interface for easy deployment.
+A high-performance, AOT-compiled AI chatbot application built with .NET 10 that uses Retrieval-Augmented Generation (RAG) to answer questions about landmarks using Wikipedia data. The application features vector search with **SQLite-vec** (default) or **Pinecone**, OpenAI embeddings, and an embedded web interface for easy deployment.
 
 ## 📋 Table of Contents
 
@@ -33,13 +33,13 @@ This project demonstrates how to build an intelligent chatbot that can:
 
 ## ✨ Features
 
-- **🔍 Vector Search**: Semantic search using OpenAI embeddings and Pinecone vector database
+- **🔍 Vector Search**: Semantic search using OpenAI embeddings with SQLite-vec (default) or Pinecone
 - **💬 Interactive Chat**: Full conversation support with context retention
 - **❓ RAG Q&A**: Question answering with retrieved context from Wikipedia
 - **🔧 Index Manager**: Web-based interface to build and manage the vector index
-- **🚀 AOT Compiled**: Single native executable for fast startup and low memory footprint
+- **🚀 AOT Compiled**: Native executable for fast startup and low memory footprint
 - **🌐 Embedded Frontend**: No separate web server needed - everything in one file
-- **⚙️ Configurable**: Environment-based configuration with .env file support
+- **⚙️ Configurable**: Switch between SQLite-vec and Pinecone via configuration
 - **🔐 Secure**: API keys stored in environment variables, never committed to source
 
 ## 🏗️ Architecture
@@ -263,17 +263,62 @@ This project demonstrates how to build an intelligent chatbot that can:
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - OpenAI API Key ([Get one here](https://platform.openai.com/api-keys))
-- Pinecone API Key ([Get one here](https://www.pinecone.io/))
-- Pinecone Index named `landmark-chunks` (512 dimensions)
+- **For SQLite-vec (default):** `vec0.dll` extension (see setup below)
+- **For Pinecone:** API Key ([Get one here](https://www.pinecone.io/)) and Index named `landmark-chunks`
 
-### Quick Start
+### SQLite-vec Extension Setup (Default Provider)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd backend
+The application uses SQLite-vec by default for local vector storage. You need the native extension:
+
+**Option 1: Automated (Windows)**
+```powai-chatbot-using-your-data-in-dotnet
    ```
 
+2. **Setup SQLite-vec extension** (if using default provider)
+   ```powershell
+   .\download-sqlite-vec.ps1
+   ```
+   Or download manually following the steps above.
+
+3. **Configure environment variables**
+   
+   Edit the `.env` file:
+   ```bash
+   OPENAI_API_KEY=your-openai-key-here
+   # For Pinecone (optional):
+   # PINECONE_API_KEY=your-pinecone-key-here
+   PORT=5108
+   ```
+
+4. **Run the application**
+   ```bash
+   dotnet run
+   ```
+
+5. **Open your browser**
+   
+   The application will automatically open at `http://localhost:5108/ui`
+
+6. **Build the index**
+   
+   Navigate to "Index Manager" and click "Build Index" to populate the vector database with Wikipedia articles about landmarks.
+
+### Switching Vector Store Providers
+
+Edit `appsettings.json`:
+
+```json
+{
+  "VectorStore": {
+    "Provider": "SqliteVec"  // or "Pinecone"
+  }
+}
+```
+
+- **SqliteVec** (default): Local storage, no external dependencies, faster queries
+- **Pinecone**: Cloud-based, scales to millions of vectors, requires API key
+
+See [VECTOR_STORE_COMPARISON.md](VECTOR_STORE_COMPARISON.md) for detailed comparison
 2. **Configure environment variables**
    
    Edit the `.env` file:

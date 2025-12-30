@@ -35,16 +35,12 @@ if (promptStore.IsEmpty())
 
 // API endpoints for index management
 // GET /api/index/list - List all indexed record IDs
-app.MapGet("/api/index/list", async (Pinecone.IndexClient pineconeIndex) =>
+app.MapGet("/api/index/list", async (IVectorStore vectorStore) =>
 {
     try
     {
-        // Query with a dummy vector to get all IDs (Pinecone doesn't have a direct list API)
-        // We'll use DescribeIndexStats to get count
-        var stats = await pineconeIndex.DescribeIndexStatsAsync(new Pinecone.DescribeIndexStatsRequest());
-        var totalCount = stats.TotalVectorCount ?? 0;
-
-        return Results.Ok(new IndexStatsResponse(totalCount, totalCount > 0));
+        var count = await vectorStore.GetVectorCount();
+        return Results.Ok(new IndexStatsResponse((uint)count, count > 0));
     }
     catch (Exception ex)
     {
@@ -65,10 +61,6 @@ app.MapPost("/api/index/build", async (IndexBuilder indexBuilder) =>
         return Results.Problem($"Failed to build index: {ex.Message}");
     }
 });
-
-// Uncomment to do indexing when you run the project (you only need to do this once)...
-// var indexer = app.Services.GetRequiredService<IndexBuilder>();
-// await indexer.BuildIndex(SourceData.LandmarkNames);
 
 // API endpoints for prompt management
 // GET /api/prompts - List all prompts
@@ -123,6 +115,9 @@ app.MapPost("/api/prompts/reset", (PromptStore promptStore) =>
     ));
 });
 
+// Redirect root to UI
+app.MapGet("/", () => Results.Redirect("/ui"));
+
 // Serve embedded frontend at /ui
 app.MapGet("/ui", () => Results.Content(EmbeddedFrontend.IndexHtml, "text/html"));
 app.MapGet("/ui/indexer", () => Results.Content(EmbeddedFrontend.IndexerHtml, "text/html"));
@@ -134,7 +129,7 @@ app.MapGet("/ui/searchlandmarks", () => Results.Content(EmbeddedFrontend.SearchL
 
 // API endpoints
 // GET /api/search?query=...
-app.MapGet("/api/search", async (string query, VectorSearchService search) =>
+app.MapGet("/api/search", async (string query, IVectorSearchService search) =>
 {
     var results = await search.FindTopKChunks(query, 3);
     return Results.Ok(results);

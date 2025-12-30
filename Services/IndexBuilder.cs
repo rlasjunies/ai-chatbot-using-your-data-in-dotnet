@@ -1,14 +1,16 @@
-using Pinecone;
 using Microsoft.Extensions.AI;
 using System.Collections.Immutable;
 
 namespace ChatBot.Services;
 
+/// <summary>
+/// Builds the vector index by fetching Wikipedia articles and storing them
+/// Works with any IVectorStore implementation (Pinecone, SQLite-vec, etc.)
+/// </summary>
 public class IndexBuilder(
     StringEmbeddingGenerator embeddingGenerator,
-    IndexClient pineconeIndex,
+    IVectorStore vectorStore,
     WikipediaClient wikipediaClient,
-    DocumentChunkStore chunkStore,
     ArticleSplitter splitter)
 {
     public async Task BuildIndex(string[] pageTitles)
@@ -32,31 +34,16 @@ public class IndexBuilder(
                 new EmbeddingGenerationOptions { Dimensions = 512 }
             );
 
-            var vectors = chunks.Select((chunk, index) => new Vector
+            // Store chunks with their embeddings using the configured vector store
+            for (int i = 0; i < chunks.Count; i++)
             {
-                Id = chunk.Id,
-                Values = embeddings[index].Vector.ToArray(),
-                Metadata = new Metadata
-                {
-                    { "title", chunk.Title },
-                    { "section", chunk.Section },
-                    { "chunk_index", chunk.ChunkIndex }
-                }
-            });
-
-            await pineconeIndex.UpsertAsync(new UpsertRequest
-            {
-                Vectors = vectors
-            });
-
-            foreach (var chunk in chunks)
-            {
-                chunkStore.SaveDocumentChunk(chunk);
+                await vectorStore.SaveDocumentChunkWithEmbedding(
+                    chunks[i],
+                    embeddings[i].Vector.ToArray()
+                );
             }
 
-            // If you have rate limit issues with Pinecone (may happen based on your plan) then uncomment this Task.Delay()
-            // see https://docs.pinecone.io/reference/api/database-limits#rate-limits
-            // await Task.Delay(500);
+            Console.WriteLine($"Indexed {chunks.Count} chunks for '{title}'");
         }
     }
 }
