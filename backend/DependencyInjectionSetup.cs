@@ -8,7 +8,7 @@ using Pinecone;
 
 namespace ChatBot;
 
-static class Startup
+static class DependencyInjectionSetup
 {
     public static void ConfigureServices(WebApplicationBuilder builder)
     {

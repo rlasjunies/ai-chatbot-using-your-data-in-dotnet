@@ -9,6 +9,7 @@ namespace ChatBot;
 [JsonSerializable(typeof(DocumentChunk))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(List<ChatMessage>))]
+[JsonSerializable(typeof(IList<ChatMessage>))]
 [JsonSerializable(typeof(ChatMessage))]
 [JsonSerializable(typeof(ChatRole))]
 [JsonSerializable(typeof(IndexStatsResponse))]
@@ -20,6 +21,7 @@ namespace ChatBot;
 [JsonSerializable(typeof(PromptUpdateRequest))]
 [JsonSerializable(typeof(PromptUpdateResponse))]
 [JsonSerializable(typeof(PromptResetResponse))]
+[JsonSerializable(typeof(ErrorResponse))]
 [JsonSerializable(typeof(DateTime))]
 [JsonSourceGenerationOptions(WriteIndented = false, PropertyNameCaseInsensitive = true)]
 public partial class AppJsonSerializerContext : JsonSerializerContext

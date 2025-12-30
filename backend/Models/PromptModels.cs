@@ -41,3 +41,10 @@ public record PromptResetResponse(
     string Message,
     int PromptsReset
 );
+
+/// <summary>
+/// Generic error response
+/// </summary>
+public record ErrorResponse(
+    string Message
+);

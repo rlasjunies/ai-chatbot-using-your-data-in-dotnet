@@ -22,7 +22,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 });
 
-Startup.ConfigureServices(builder);
+DependencyInjectionSetup.ConfigureServices(builder);
 var app = builder.Build();
 
 // Initialize prompts database with defaults if empty
@@ -91,7 +91,7 @@ app.MapGet("/api/prompts/{name}", (string name, PromptStore promptStore) =>
 
     if (prompt.Name == null)
     {
-        return Results.NotFound(new { message = $"Prompt '{name}' not found" });
+        return Results.NotFound(new ErrorResponse($"Prompt '{name}' not found"));
     }
 
     return Results.Ok(new PromptDetail(prompt.Name, prompt.Content, prompt.UpdatedAt));
@@ -102,7 +102,7 @@ app.MapPut("/api/prompts/{name}", (string name, PromptUpdateRequest request, Pro
 {
     if (string.IsNullOrWhiteSpace(request.Content))
     {
-        return Results.BadRequest(new { message = "Content cannot be empty" });
+        return Results.BadRequest(new ErrorResponse("Content cannot be empty"));
     }
 
     promptStore.SetPrompt(name, request.Content);
