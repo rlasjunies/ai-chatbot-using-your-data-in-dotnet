@@ -79,6 +79,11 @@ public static class EmbeddedFrontend
         return getTextFromMessage(msg).length > 0;
       }
 
+      function formatDuration(ms) {
+        if (ms < 1000) return `${ms}ms`;
+        return `${(ms / 1000).toFixed(1)}s`;
+      }
+
       function toOpenAIMsg(msg) {
         if (!msg) return msg;
         if (Array.isArray(msg.contents)) return msg;
@@ -97,33 +102,150 @@ public static class EmbeddedFrontend
         const [input, setInput] = useState("");
         const [isSending, setIsSending] = useState(false);
         const [error, setError] = useState(null);
+        const [progressSteps, setProgressSteps] = useState([]);
+        const [progressCompleted, setProgressCompleted] = useState(false);
+        const [progressExpanded, setProgressExpanded] = useState(true);
+        const [useStreaming, setUseStreaming] = useState(true);
         const bottomRef = useRef(null);
 
         useEffect(() => {
           bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, [messages.length]);
+        }, [messages.length, progressSteps.length]);
 
         const visibleMessages = useMemo(() => messages.filter(isRenderable), [messages]);
 
-        async function sendMessage(e) {
-          e?.preventDefault();
-          if (!input.trim() || isSending) return;
-          setError(null);
+        async function sendMessageStreaming(nextHistory) {
+          setProgressSteps([]);
+          setProgressCompleted(false);
+          setProgressExpanded(true);
+          
+          try {
+            const res = await fetch("/api/chat/stream", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(nextHistory.map(toOpenAIMsg)),
+            });
+            
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let completionReceived = false;
+            let lastStepTimestamp = null;
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
+              
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6).trim();
+                  if (data === "[DONE]") {
+                    // Stream is done, mark progress as completed and collapse it
+                    setProgressCompleted(true);
+                    setProgressExpanded(false);
+                    continue;
+                  }
+                  
+                  try {
+                    const event = JSON.parse(data);
+                    const eventTimestamp = new Date(event.Timestamp || event.timestamp);
+                    const duration = lastStepTimestamp ? eventTimestamp - lastStepTimestamp : 0;
+                    lastStepTimestamp = eventTimestamp;
+                    
+                    if (event.Type === "status" || event.type === "status") {
+                      setProgressSteps(prev => [...prev, {
+                        type: "status",
+                        message: event.Message || event.message,
+                        timestamp: eventTimestamp,
+                        duration: duration
+                      }]);
+                    }
+                    else if (event.Type === "function_call" || event.type === "function_call") {
+                      setProgressSteps(prev => [...prev, {
+                        type: "function_call",
+                        message: event.Message || event.message,
+                        functionName: event.FunctionName || event.functionName,
+                        timestamp: eventTimestamp,
+                        duration: duration
+                      }]);
+                    }
+                    else if (event.Type === "function_result" || event.type === "function_result") {
+                      setProgressSteps(prev => [...prev, {
+                        type: "function_result",
+                        message: event.Message || event.message,
+                        functionName: event.FunctionName || event.functionName,
+                        timestamp: eventTimestamp,
+                        duration: duration
+                      }]);
+                    }
+                    else if (event.Type === "completion" || event.type === "completion") {
+                      completionReceived = true;
+                      const content = event.Content || event.content || "";
+                      const msgs = event.Messages || event.messages || [];
+                      const eventTimestamp = new Date(event.Timestamp || event.timestamp);
+                      const duration = lastStepTimestamp ? eventTimestamp - lastStepTimestamp : 0;
+                      
+                      console.log("[SSE] Completion event received:", { content, msgsLength: msgs.length, msgs });
+                      
+                      // Add the assistant message - prefer content string for simplicity
+                      if (content && content.trim()) {
+                        console.log("[SSE] Adding content as new message:", content);
+                        setMessages(prev => {
+                          const newMsg = {
+                            role: "assistant",
+                            contents: [{ $type: "text", text: content }]
+                          };
+                          console.log("[SSE] New messages array will be:", [...prev, newMsg]);
+                          return [...prev, newMsg];
+                        });
+                      } else if (msgs.length > 0) {
+                        console.log("[SSE] Adding messages from event:", msgs);
+                        setMessages(prev => [...prev, ...msgs]);
+                      } else {
+                        console.warn("[SSE] Completion event has no content or messages!");
+                      }
+                      
+                      // Show final completion step
+                      setProgressSteps(prev => [...prev, {
+                        type: "completion",
+                        message: event.Message || event.message,
+                        timestamp: new Date(event.Timestamp || event.timestamp),
+                        duration: duration
+                      }]);
+                    }
+                    else if (event.Type === "error" || event.type === "error") {
+                      setError(event.Message || event.message);
+                    }
+                  } catch (parseError) {
+                    console.error("Failed to parse SSE event:", parseError, data);
+                  }
+                }
+              }
+            }
+            
+            // If we didn't get a completion event, something went wrong
+            if (!completionReceived) {
+              throw new Error("No completion event received");
+            }
+          } catch (err) {
+            console.error(err);
+            setError(err.message);
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              contents: [{ $type: "text", text: "Sorry—something went wrong." }]
+            }]);
+            setProgressCompleted(true);
+            setProgressExpanded(false);
+          }
+        }
 
-          const userMsg = {
-            role: "user",
-            contents: [
-              {
-                $type: "text",
-                text: input.trim(),
-              },
-            ],
-          };
-          const nextHistory = [...messages, userMsg];
-          setMessages(nextHistory);
-          setInput("");
-          setIsSending(true);
-
+        async function sendMessageNonStreaming(nextHistory) {
           try {
             const res = await fetch("/api/chat", {
               method: "POST",
@@ -131,11 +253,7 @@ public static class EmbeddedFrontend
               body: JSON.stringify(nextHistory.map(toOpenAIMsg)),
             });
             if (!res.ok) throw new Error("HTTP " + res.status);
-            // Be tolerant: backend may return
-            // - an array of messages
-            // - an object with { messages: [...] }
-            // - a single message object
-            // - plain text
+            
             const contentType = res.headers.get("content-type") || "";
             if (contentType.includes("application/json")) {
               const data = await res.json();
@@ -169,9 +287,35 @@ public static class EmbeddedFrontend
                 contents: [{ $type: "text", text: "Sorry—something went wrong." }],
               },
             ]);
-          } finally {
-            setIsSending(false);
           }
+        }
+
+        async function sendMessage(e) {
+          e?.preventDefault();
+          if (!input.trim() || isSending) return;
+          setError(null);
+
+          const userMsg = {
+            role: "user",
+            contents: [
+              {
+                $type: "text",
+                text: input.trim(),
+              },
+            ],
+          };
+          const nextHistory = [...messages, userMsg];
+          setMessages(nextHistory);
+          setInput("");
+          setIsSending(true);
+
+          if (useStreaming) {
+            await sendMessageStreaming(nextHistory);
+          } else {
+            await sendMessageNonStreaming(nextHistory);
+          }
+
+          setIsSending(false);
         }
 
         function onKeyDown(e) {
@@ -183,6 +327,9 @@ public static class EmbeddedFrontend
 
         function clearChat() {
           setMessages([]);
+          setProgressSteps([]);
+          setProgressCompleted(false);
+          setProgressExpanded(true);
           setError(null);
         }
 
@@ -191,32 +338,125 @@ public static class EmbeddedFrontend
             <header className="sticky top-0 z-10 bg-white border-b">
               <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
                 <h1 className="text-lg font-semibold">🤖 Chatbot Demo</h1>
-                <button onClick={clearChat} disabled={isSending}>Clear Chat</button>
+                <div className="flex gap-2 items-center">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useStreaming}
+                      onChange={(e) => setUseStreaming(e.target.checked)}
+                      disabled={isSending}
+                    />
+                    Show Progress
+                  </label>
+                  <button onClick={clearChat} disabled={isSending} className="px-3 py-1 border rounded hover:bg-gray-50">
+                    Clear Chat
+                  </button>
+                </div>
               </div>
             </header>
 
-            <main className="flex-1">
+            <main className="flex-1 overflow-auto">
               <div className="mx-auto max-w-3xl px-4 py-6">
                 {visibleMessages.length === 0 ? (
-                  <div className="text-center text-neutral-500 py-16">Start a conversation below.</div>
+                  <div className="text-center text-neutral-500 py-16">
+                    <div className="mb-4 text-4xl">💬</div>
+                    <div>Start a conversation below.</div>
+                    <div className="text-sm mt-2">Toggle "Show Progress" to see AI processing steps in real-time.</div>
+                  </div>
                 ) : (
                   <ul>
                     {visibleMessages.map((m, i) => (
-                      <li key={i} className="flex gap-3 mb-2">
-                        <div className={clsx("w-8 h-8 flex items-center justify-center", m.role === "user" ? "bg-blue-600 text-white" : "bg-green-600 text-white")}>
+                      <li key={i} className="flex gap-3 mb-4">
+                        <div className={clsx("w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full font-semibold", m.role === "user" ? "bg-blue-600 text-white" : "bg-green-600 text-white")}>
                           {m.role === "user" ? "U" : "A"}
                         </div>
-                        <div className="flex-1 border rounded p-2 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: renderMessageHtml(m) }}></div>
+                        <div className="flex-1 border rounded-lg p-3 bg-white shadow-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: renderMessageHtml(m) }}></div>
                       </li>
                     ))}
                     <div ref={bottomRef}></div>
                   </ul>
                 )}
-                {error && <div style={{ color: "red" }}>Error: {error}</div>}
+                
+                {/* Progress steps display */}
+                {progressSteps.length > 0 && (
+                  <div className={clsx(
+                    "mb-4 border rounded-lg p-4 shadow-sm transition-colors",
+                    progressCompleted ? "bg-gray-50 border-gray-300" : "bg-blue-50 border-blue-200"
+                  )}>
+                    <div 
+                      className="font-semibold flex items-center justify-between cursor-pointer"
+                      onClick={() => setProgressExpanded(!progressExpanded)}
+                    >
+                      <div className={clsx("flex items-center gap-2", progressCompleted ? "text-gray-700" : "text-blue-900")}>
+                        {!progressCompleted && (
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        )}
+                        {progressCompleted && <span className="text-green-600">✓</span>}
+                        {progressCompleted ? "Processing completed" : "Processing..."}
+                        {progressCompleted && progressSteps.length > 0 && (
+                          <span className="text-xs text-gray-500 font-mono ml-2">
+                            Total: {formatDuration(progressSteps.reduce((sum, step) => sum + (step.duration || 0), 0))}
+                          </span>
+                        )}
+                      </div>
+                      <button className="text-sm text-gray-500 hover:text-gray-700">
+                        {progressExpanded ? "▼ Hide" : "▶ Show details"}
+                      </button>
+                    </div>
+                    {progressExpanded && (
+                      <div className="space-y-2 mt-3">
+                        {progressSteps.map((step, idx) => (
+                          <div key={idx} className="flex items-start gap-2 text-sm">
+                            <span className={clsx(
+                              "flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold",
+                              step.type === "completion" ? "bg-green-500 text-white" :
+                              step.type === "error" ? "bg-red-500 text-white" :
+                              step.type === "function_call" ? "bg-purple-500 text-white" :
+                              step.type === "function_result" ? "bg-teal-500 text-white" :
+                              step.type === "status" && step.message.includes("LLM") ? "bg-blue-600 text-white" :
+                              "bg-gray-400 text-white"
+                            )}>
+                              {step.type === "completion" ? "✓" :
+                               step.type === "error" ? "✗" :
+                               step.type === "function_call" ? "🔍" :
+                               step.type === "function_result" ? "📊" :
+                               step.type === "status" && step.message.includes("LLM") ? "🤖" :
+                               "•"}
+                            </span>
+                            <div className="flex-1 flex items-baseline justify-between gap-2">
+                              <span className={clsx(
+                                step.type === "function_call" ? "text-purple-800 font-medium" :
+                                step.type === "function_result" ? "text-teal-800 font-medium" :
+                                step.type === "status" && step.message.includes("LLM") ? "text-blue-800 font-medium" :
+                                "text-gray-700"
+                              )}>
+                                {step.message}
+                              </span>
+                              {step.duration !== undefined && (
+                                <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
+                                  +{formatDuration(step.duration)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                    <strong>Error:</strong> {error}
+                  </div>
+                )}
               </div>
             </main>
 
-            <footer className="sticky bottom-0 bg-white border-t">
+            <footer className="sticky bottom-0 bg-white border-t shadow-lg">
               <div className="mx-auto max-w-3xl px-4 py-4">
                 <form onSubmit={sendMessage} className="flex gap-2 items-end">
                   <textarea
@@ -225,12 +465,13 @@ public static class EmbeddedFrontend
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={onKeyDown}
-                    className="flex-1 border rounded p-2"
+                    className="flex-1 border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSending}
                   />
                   <button
                     type="submit"
                     disabled={isSending || !input.trim()}
-                    className="px-4 py-2 rounded bg-blue-600 text-white disabled:bg-gray-300"
+                    className="px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
                   >
                     {isSending ? "Sending…" : "Send"}
                   </button>

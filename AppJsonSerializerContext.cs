@@ -27,6 +27,11 @@ namespace ChatBot;
 [JsonSerializable(typeof(PromptResetResponse))]
 [JsonSerializable(typeof(ErrorResponse))]
 [JsonSerializable(typeof(DateTime))]
+[JsonSerializable(typeof(ProgressEvent))]
+[JsonSerializable(typeof(FunctionCallEvent))]
+[JsonSerializable(typeof(FunctionResultEvent))]
+[JsonSerializable(typeof(StatusEvent))]
+[JsonSerializable(typeof(CompletionEvent))]
 [JsonSourceGenerationOptions(WriteIndented = false, PropertyNameCaseInsensitive = true)]
 public partial class AppJsonSerializerContext : JsonSerializerContext
 {

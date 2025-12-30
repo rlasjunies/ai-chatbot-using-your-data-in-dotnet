@@ -157,6 +157,83 @@ app.MapPost("/api/chat", async (
     return Results.Ok(response.Messages);
 });
 
+// POST /api/chat/stream - Server-Sent Events streaming with progress tracking
+app.MapPost("/api/chat/stream", async (
+    List<ChatMessage> messages,
+    IChatClient client,
+    ChatOptions chatOptions,
+    PromptService promptService,
+    HttpContext context) =>
+{
+    context.Response.ContentType = "text/event-stream";
+    context.Response.Headers.Append("Cache-Control", "no-cache");
+    context.Response.Headers.Append("Connection", "keep-alive");
+
+    async Task SendEvent(ProgressEvent evt)
+    {
+        var eventType = evt.GetType();
+        var json = System.Text.Json.JsonSerializer.Serialize(evt, eventType, AppJsonSerializerContext.Default);
+        await context.Response.WriteAsync($"data: {json}\n\n");
+        await context.Response.Body.FlushAsync();
+    }
+
+    try
+    {
+        await SendEvent(new StatusEvent("status", "📨 Processing your request...", DateTime.UtcNow, "started"));
+
+        var withSystemPrompt = (new[] { new ChatMessage(ChatRole.System, promptService.ChatSystemPrompt) })
+                                .Concat(messages)
+                                .ToList();
+
+        // Extract the user's question for display
+        var userQuestion = messages.LastOrDefault(m => m.Role == ChatRole.User)?.Text ?? "";
+        if (!string.IsNullOrEmpty(userQuestion) && userQuestion.Length > 100)
+        {
+            userQuestion = userQuestion.Substring(0, 100) + "...";
+        }
+        
+        if (!string.IsNullOrEmpty(userQuestion))
+        {
+            await SendEvent(new StatusEvent("status", $"🔍 Analyzing: \"{userQuestion}\"", DateTime.UtcNow, "analyzing"));
+        }
+
+        // Wrap the client with progress tracking to intercept function calls
+        var progressClient = new ProgressTrackingChatClient(client, SendEvent);
+        var response = await progressClient.GetResponseAsync(withSystemPrompt, chatOptions);
+
+        await SendEvent(new StatusEvent("status", "💭 Response generated successfully", DateTime.UtcNow, "generating"));
+
+        // Extract the messages from the response
+        var allMessages = response.Messages.ToList();
+        var assistantMessage = allMessages.LastOrDefault(m => m.Role == ChatRole.Assistant);
+        var assistantContent = assistantMessage?.Text ?? "";
+
+        Console.WriteLine($"[SSE] Response has {allMessages.Count} total messages");
+        Console.WriteLine($"[SSE] Assistant message found: {assistantMessage != null}");
+        Console.WriteLine($"[SSE] Assistant content length: {assistantContent.Length}");
+
+        // Send only new messages (system prompt and original messages are already in history)
+        var newMessages = allMessages.Where(m => m.Role == ChatRole.Assistant || m.Role == ChatRole.Tool).ToList();
+
+        // Send the complete response
+        await SendEvent(new CompletionEvent(
+            "completion",
+            "✅ Response complete",
+            DateTime.UtcNow,
+            assistantContent,
+            newMessages
+        ));
+
+        await context.Response.WriteAsync("data: [DONE]\n\n");
+        await context.Response.Body.FlushAsync();
+    }
+    catch (Exception ex)
+    {
+        await SendEvent(new StatusEvent("error", $"❌ Error: {ex.Message}", DateTime.UtcNow, "error"));
+        await context.Response.WriteAsync("data: [DONE]\n\n");
+    }
+});
+
 // Launch browser when application starts
 app.Lifetime.ApplicationStarted.Register(() =>
 {
