@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using ChatBot.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,9 @@ namespace ChatBot;
 [JsonSerializable(typeof(IList<ChatMessage>))]
 [JsonSerializable(typeof(ChatMessage))]
 [JsonSerializable(typeof(ChatRole))]
+[JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(object))]
+[JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(IndexStatsResponse))]
 [JsonSerializable(typeof(IndexBuildResponse))]
 [JsonSerializable(typeof(ProblemDetails))]
